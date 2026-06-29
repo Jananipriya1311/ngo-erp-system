@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline - NGO ERP</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .offline-container {
+            text-align: center;
+            padding: 40px;
+            max-width: 500px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .offline-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            color: #ffd700;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        h1 {
+            font-size: 32px;
+            margin-bottom: 15px;
+        }
+
+        p {
+            font-size: 16px;
+            margin-bottom: 30px;
+            opacity: 0.9;
+            line-height: 1.6;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            padding: 8px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 30px;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .status-indicator i {
+            margin-right: 8px;
+            color: #ffd700;
+        }
+
+        .offline-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: white;
+            color: #667eea;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: white;
+            border: 2px solid white;
+        }
+
+        .btn-secondary:hover {
+            background: white;
+            color: #667eea;
+        }
+
+        .cached-data {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .cached-data h3 {
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .cached-items {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+        }
+
+        .cached-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 14px;
+        }
+
+        .cached-item i {
+            margin-right: 5px;
+            color: #ffd700;
+        }
+
+        .retry-button {
+            background: none;
+            border: none;
+            color: white;
+            text-decoration: underline;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 20px;
+            opacity: 0.8;
+        }
+
+        .retry-button:hover {
+            opacity: 1;
+        }
+
+        @media (max-width: 480px) {
+            .offline-container {
+                padding: 20px;
+                margin: 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-container">
+        <div class="offline-icon">
+            <i class="fas fa-wifi-slash"></i>
+        </div>
+        
+        <h1>You're Offline</h1>
+        
+        <p>
+            Don't worry! You can still access cached data and continue working offline. 
+            Your changes will sync automatically when you're back online.
+        </p>
+
+        <div class="status-indicator">
+            <i class="fas fa-circle"></i> Working in Offline Mode
+        </div>
+
+        <div class="offline-actions">
+            <a href="/" class="btn btn-primary">
+                <i class="fas fa-home"></i> Go to Dashboard
+            </a>
+            <button onclick="checkConnection()" class="btn btn-secondary">
+                <i class="fas fa-sync-alt"></i> Retry Connection
+            </button>
+        </div>
+
+        <div class="cached-data">
+            <h3><i class="fas fa-database"></i> Available Offline</h3>
+            <div class="cached-items" id="cachedItems">
+                <div class="cached-item">
+                    <i class="fas fa-users"></i> Beneficiaries
+                </div>
+                <div class="cached-item">
+                    <i class="fas fa-donate"></i> Donations
+                </div>
+                <div class="cached-item">
+                    <i class="fas fa-chart-line"></i> Expenses
+                </div>
+                <div class="cached-item">
+                    <i class="fas fa-project-diagram"></i> Programs
+                </div>
+            </div>
+        </div>
+
+        <button class="retry-button" onclick="retryConnection()">
+            <i class="fas fa-redo-alt"></i> Try to reconnect
+        </button>
+    </div>
+
+    <script>
+        // Check connection status
+        function checkConnection() {
+            if (navigator.onLine) {
+                window.location.reload();
+            } else {
+                alert('Still offline. Please check your internet connection.');
+            }
+        }
+
+        function retryConnection() {
+            // Attempt to sync offline data
+            if ('serviceWorker' in navigator && 'SyncManager' in window) {
+                navigator.serviceWorker.ready.then(registration => {
+                    return registration.sync.register('sync-data');
+                }).then(() => {
+                    alert('Sync queued. Will complete when online.');
+                });
+            } else {
+                alert('Background sync not supported. Please check connection manually.');
+            }
+        }
+
+        // Listen for online/offline events
+        window.addEventListener('online', function() {
+            alert('You are back online! Syncing data...');
+            retryConnection();
+        });
+
+        window.addEventListener('offline', function() {
+            console.log('You are offline');
+        });
+
+        // Check initial connection
+        if (!navigator.onLine) {
+            console.log('Starting in offline mode');
+        }
+    </script>
+</body>
+</html>

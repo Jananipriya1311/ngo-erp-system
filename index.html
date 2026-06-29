@@ -1,0 +1,1615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="NGO ERP">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="NGO ERP">
+    
+    <title>NGO ERP - Complete Management System</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-167x167.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180x180.png">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/style.css">
+    
+    <!-- Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/js/service-worker.js')
+                    .then(function(registration) {
+                        console.log('ServiceWorker registered:', registration.scope);
+                        
+                        registration.addEventListener('updatefound', function() {
+                            const newWorker = registration.installing;
+                            console.log('New service worker installing');
+                        });
+                    })
+                    .catch(function(error) {
+                        console.log('ServiceWorker registration failed:', error);
+                    });
+                
+                navigator.serviceWorker.addEventListener('message', function(event) {
+                    if (event.data.type === 'SYNC_COMPLETED') {
+                        showToast('Data synced with server', 'success');
+                        loadData();
+                    }
+                });
+            });
+        }
+        
+        window.addEventListener('online', function() {
+            showToast('You are back online! Syncing...', 'success');
+            if ('serviceWorker' in navigator && 'SyncManager' in window) {
+                navigator.serviceWorker.ready.then(registration => {
+                    registration.sync.register('sync-data');
+                });
+            }
+        });
+        
+        window.addEventListener('offline', function() {
+            showToast('You are offline. Working in offline mode.', 'warning');
+        });
+        
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            showInstallPrompt();
+        });
+        
+        function showInstallPrompt() {
+            const installBtn = document.createElement('button');
+            installBtn.className = 'install-pwa-btn';
+            installBtn.innerHTML = '<i class="fas fa-download"></i> Install App';
+            installBtn.onclick = installPWA;
+            document.querySelector('.top-bar-actions').appendChild(installBtn);
+        }
+        
+        function installPWA() {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    console.log('User accepted install');
+                    showToast('App installed successfully!', 'success');
+                }
+                deferredPrompt = null;
+            });
+        }
+    </script>
+</head>
+<body>
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-lock"></i> NGO ERP Login</h2>
+            </div>
+            <form id="loginForm">
+                <div class="input-group">
+                    <i class="fas fa-user"></i>
+                    <input type="text" id="username" placeholder="Username" required autocomplete="off">
+                </div>
+                <div class="input-group">
+                    <i class="fas fa-key"></i>
+                    <input type="password" id="password" placeholder="Password" required>
+                </div>
+                <div class="form-options">
+                    <label>
+                        <input type="checkbox" id="rememberMe"> Remember me
+                    </label>
+                    <a href="#" onclick="showForgotPassword()">Forgot Password?</a>
+                </div>
+                <button type="submit" class="primary-btn">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </button>
+            </form>
+            <div id="loginError" class="error-message"></div>
+            <div class="modal-footer">
+                <p>Demo: admin / admin123</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Forgot Password Modal -->
+    <div id="forgotModal" class="modal">
+        <div class="modal-content">
+            <h2><i class="fas fa-question-circle"></i> Reset Password</h2>
+            <p>Enter your email to receive reset instructions</p>
+            <input type="email" id="resetEmail" placeholder="Your email">
+            <button onclick="sendResetLink()" class="primary-btn">Send Reset Link</button>
+            <button onclick="closeForgotModal()" class="secondary-btn">Back to Login</button>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="appContainer" style="display: none;">
+        <!-- Mobile Menu Toggle -->
+        <div class="mobile-menu-toggle" onclick="toggleMobileMenu()">
+            <i class="fas fa-bars"></i>
+        </div>
+
+        <!-- Sidebar Navigation -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2><i class="fas fa-heart"></i> NGO ERP</h2>
+                <p>Version 4.0</p>
+            </div>
+            
+            <div class="user-profile">
+                <div class="user-avatar">
+                    <i class="fas fa-user-circle"></i>
+                </div>
+                <div class="user-details">
+                    <span id="loggedInUser">Admin</span>
+                    <small id="userRole">Administrator</small>
+                </div>
+            </div>
+
+            <div class="sidebar-menu">
+                <button onclick="showSection('dashboard')" class="menu-item active">
+                    <i class="fas fa-tachometer-alt"></i> <span>Dashboard</span>
+                </button>
+                <button onclick="showSection('beneficiaries')" class="menu-item">
+                    <i class="fas fa-users"></i> <span>Beneficiaries</span>
+                </button>
+                <button onclick="showSection('donations')" class="menu-item">
+                    <i class="fas fa-donate"></i> <span>Donations</span>
+                </button>
+                <button onclick="showSection('expenses')" class="menu-item">
+                    <i class="fas fa-chart-line"></i> <span>Expenses</span>
+                </button>
+                <button onclick="showSection('programs')" class="menu-item">
+                    <i class="fas fa-project-diagram"></i> <span>Programs</span>
+                </button>
+                <button onclick="showSection('volunteers')" class="menu-item">
+                    <i class="fas fa-hands-helping"></i> <span>Volunteers</span>
+                </button>
+                <button onclick="showSection('calendar')" class="menu-item">
+                    <i class="fas fa-calendar-alt"></i> <span>Calendar</span>
+                </button>
+                <button onclick="showSection('documents')" class="menu-item">
+                    <i class="fas fa-folder-open"></i> <span>Documents</span>
+                </button>
+                <button onclick="showSection('communications')" class="menu-item">
+                    <i class="fas fa-envelope"></i> <span>Communications</span>
+                </button>
+                <button onclick="showSection('reports')" class="menu-item">
+                    <i class="fas fa-chart-pie"></i> <span>Analytics</span>
+                </button>
+                <button onclick="showSection('settings')" class="menu-item">
+                    <i class="fas fa-cog"></i> <span>Settings</span>
+                </button>
+            </div>
+
+            <div class="sidebar-footer">
+                <button onclick="logout()" class="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="page-title" id="pageTitle">Dashboard</div>
+                <div class="top-bar-actions">
+                    <button onclick="showNotifications()" class="icon-btn">
+                        <i class="fas fa-bell"></i>
+                        <span class="badge" id="notificationBadge">0</span>
+                    </button>
+                    <button onclick="showQuickActions()" class="icon-btn">
+                        <i class="fas fa-plus-circle"></i>
+                    </button>
+                    <button onclick="toggleTheme()" class="icon-btn">
+                        <i class="fas fa-moon" id="themeIcon"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick Actions Dropdown -->
+            <div id="quickActionsMenu" class="quick-actions-menu" style="display: none;">
+                <button onclick="quickAddBeneficiary()"><i class="fas fa-user-plus"></i> Add Beneficiary</button>
+                <button onclick="quickAddDonation()"><i class="fas fa-hand-holding-heart"></i> Record Donation</button>
+                <button onclick="quickAddExpense()"><i class="fas fa-receipt"></i> Add Expense</button>
+                <button onclick="quickAddVolunteer()"><i class="fas fa-user-friends"></i> Add Volunteer</button>
+                <button onclick="quickAddEvent()"><i class="fas fa-calendar-plus"></i> Schedule Event</button>
+                <button onclick="quickAddDocument()"><i class="fas fa-file-upload"></i> Upload Document</button>
+            </div>
+
+            <!-- Notifications Panel -->
+            <div id="notificationsPanel" class="notifications-panel" style="display: none;">
+                <h3>Notifications</h3>
+                <div id="notificationsList"></div>
+            </div>
+
+            <!-- Sections -->
+            <main>
+                <!-- Dashboard Section -->
+                <section id="dashboard" class="section active">
+                    <div class="welcome-banner">
+                        <h2>Welcome back, <span id="userName">Admin</span>!</h2>
+                        <p id="dailyQuote">"Making a difference, one life at a time."</p>
+                    </div>
+
+                    <!-- KPI Cards -->
+                    <div class="kpi-grid">
+                        <div class="kpi-card" onclick="showSection('beneficiaries')">
+                            <div class="kpi-icon"><i class="fas fa-users"></i></div>
+                            <div class="kpi-content">
+                                <h3>Beneficiaries</h3>
+                                <p class="kpi-value" id="totalBeneficiaries">0</p>
+                                <span class="kpi-trend" id="beneficiaryTrend">+0%</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card" onclick="showSection('donations')">
+                            <div class="kpi-icon"><i class="fas fa-donate"></i></div>
+                            <div class="kpi-content">
+                                <h3>Donations</h3>
+                                <p class="kpi-value" id="totalDonations">₹0</p>
+                                <span class="kpi-trend" id="donationTrend">+0%</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card" onclick="showSection('expenses')">
+                            <div class="kpi-icon"><i class="fas fa-chart-line"></i></div>
+                            <div class="kpi-content">
+                                <h3>Expenses</h3>
+                                <p class="kpi-value" id="totalExpenses">₹0</p>
+                                <span class="kpi-trend" id="expenseTrend">+0%</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card" onclick="showSection('programs')">
+                            <div class="kpi-icon"><i class="fas fa-wallet"></i></div>
+                            <div class="kpi-content">
+                                <h3>Balance</h3>
+                                <p class="kpi-value" id="balance">₹0</p>
+                                <span class="kpi-trend" id="balanceTrend">+0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Stats Row -->
+                    <div class="stats-row">
+                        <div class="stat-card mini">
+                            <div class="stat-icon"><i class="fas fa-calendar-check"></i></div>
+                            <div>
+                                <h4>This Month's Donations</h4>
+                                <p id="monthlyDonations">₹0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card mini">
+                            <div class="stat-icon"><i class="fas fa-receipt"></i></div>
+                            <div>
+                                <h4>This Month's Expenses</h4>
+                                <p id="monthlyExpenses">₹0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card mini">
+                            <div class="stat-icon"><i class="fas fa-hand-holding-heart"></i></div>
+                            <div>
+                                <h4>Active Programs</h4>
+                                <p id="activeProgramsCount">0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card mini">
+                            <div class="stat-icon"><i class="fas fa-clock"></i></div>
+                            <div>
+                                <h4>Volunteer Hours</h4>
+                                <p id="volunteerHours">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity & Quick Actions Row -->
+                    <div class="dashboard-grid">
+                        <div class="recent-activity-card">
+                            <h3><i class="fas fa-history"></i> Recent Activity</h3>
+                            <div id="recentActivity" class="activity-list"></div>
+                        </div>
+
+                        <div class="quick-actions-card">
+                            <h3><i class="fas fa-bolt"></i> Quick Actions</h3>
+                            <div class="action-buttons-grid">
+                                <button onclick="quickAddBeneficiary()" class="action-btn">
+                                    <i class="fas fa-user-plus"></i> Add Beneficiary
+                                </button>
+                                <button onclick="quickAddDonation()" class="action-btn">
+                                    <i class="fas fa-hand-holding-heart"></i> Record Donation
+                                </button>
+                                <button onclick="quickAddExpense()" class="action-btn">
+                                    <i class="fas fa-receipt"></i> Add Expense
+                                </button>
+                                <button onclick="quickAddVolunteer()" class="action-btn">
+                                    <i class="fas fa-user-friends"></i> Add Volunteer
+                                </button>
+                                <button onclick="showSection('calendar')" class="action-btn">
+                                    <i class="fas fa-calendar-plus"></i> Schedule Event
+                                </button>
+                                <button onclick="generateMonthlyReport()" class="action-btn">
+                                    <i class="fas fa-file-pdf"></i> Monthly Report
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Upcoming Events & Pending Tasks -->
+                    <div class="dashboard-grid">
+                        <div class="widget">
+                            <h3><i class="fas fa-calendar"></i> Upcoming Events</h3>
+                            <div id="upcomingEvents" class="widget-content"></div>
+                        </div>
+                        
+                        <div class="widget">
+                            <h3><i class="fas fa-tasks"></i> Pending Tasks</h3>
+                            <div id="pendingTasks" class="widget-content"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Documents Section -->
+                <section id="documents" class="section">
+                    <h2><i class="fas fa-folder-open"></i> Document Management</h2>
+                    
+                    <div class="document-toolbar">
+                        <button onclick="showUploadModal()" class="primary-btn">
+                            <i class="fas fa-upload"></i> Upload Document
+                        </button>
+                        <div class="document-search">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchDocuments" placeholder="Search documents..." onkeyup="searchDocuments()">
+                        </div>
+                        <select onchange="filterDocumentsByType(this.value)" class="document-filter">
+                            <option value="all">All Types</option>
+                            <option value="pdf">PDF</option>
+                            <option value="image">Images</option>
+                            <option value="spreadsheet">Spreadsheets</option>
+                            <option value="contract">Contracts</option>
+                            <option value="report">Reports</option>
+                        </select>
+                    </div>
+
+                    <div class="document-categories">
+                        <button onclick="filterDocumentsByCategory('all')" class="category-btn active">All</button>
+                        <button onclick="filterDocumentsByCategory('programs')" class="category-btn">Programs</button>
+                        <button onclick="filterDocumentsByCategory('beneficiaries')" class="category-btn">Beneficiaries</button>
+                        <button onclick="filterDocumentsByCategory('financial')" class="category-btn">Financial</button>
+                        <button onclick="filterDocumentsByCategory('legal')" class="category-btn">Legal</button>
+                    </div>
+
+                    <div class="document-grid" id="documentGrid"></div>
+
+                    <div class="document-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">Total Documents</span>
+                            <span class="stat-value" id="totalDocuments">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Total Size</span>
+                            <span class="stat-value" id="totalSize">0 MB</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Last Upload</span>
+                            <span class="stat-value" id="lastUpload">Never</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Beneficiaries Section -->
+                <section id="beneficiaries" class="section">
+                    <h2><i class="fas fa-users"></i> Beneficiary Management</h2>
+                    
+                    <div class="section-toolbar">
+                        <button onclick="showAddBeneficiaryModal()" class="primary-btn">
+                            <i class="fas fa-user-plus"></i> Add Beneficiary
+                        </button>
+                        <button onclick="scanQRCode()" class="secondary-btn">
+                            <i class="fas fa-qrcode"></i> Scan QR
+                        </button>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchBeneficiary" placeholder="Search beneficiaries..." onkeyup="searchBeneficiaries()">
+                        </div>
+                        <select id="filterBeneficiaryType" onchange="searchBeneficiaries()" class="filter-select">
+                            <option value="all">All Types</option>
+                            <option value="individual">Individual</option>
+                            <option value="family">Family</option>
+                            <option value="community">Community</option>
+                        </select>
+                        <button onclick="exportBeneficiaries()" class="export-btn">
+                            <i class="fas fa-download"></i> Export
+                        </button>
+                    </div>
+
+                    <div class="stats-row">
+                        <div class="stat-card mini">
+                            <span class="stat-icon"><i class="fas fa-user"></i></span>
+                            <div>
+                                <h4>Total</h4>
+                                <p id="beneficiaryCount">0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card mini">
+                            <span class="stat-icon"><i class="fas fa-user-plus"></i></span>
+                            <div>
+                                <h4>This Month</h4>
+                                <p id="beneficiaryMonthly">0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card mini">
+                            <span class="stat-icon"><i class="fas fa-clock"></i></span>
+                            <div>
+                                <h4>Pending</h4>
+                                <p id="beneficiaryPending">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="beneficiary-grid" id="beneficiaryGrid"></div>
+                </section>
+
+                <!-- Donations Section -->
+                <section id="donations" class="section">
+                    <h2><i class="fas fa-donate"></i> Donation Management</h2>
+                    
+                    <div class="section-toolbar">
+                        <button onclick="showAddDonationModal()" class="primary-btn">
+                            <i class="fas fa-plus"></i> Record Donation
+                        </button>
+                        <button onclick="generateReceipt()" class="secondary-btn">
+                            <i class="fas fa-receipt"></i> Generate Receipt
+                        </button>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchDonation" placeholder="Search donations..." onkeyup="searchDonations()">
+                        </div>
+                        <input type="month" id="filterDonationMonth" onchange="searchDonations()" class="month-filter">
+                        <button onclick="exportDonations()" class="export-btn">
+                            <i class="fas fa-download"></i> Export
+                        </button>
+                    </div>
+
+                    <div class="summary-cards">
+                        <div class="summary-card">
+                            <h4>Total Donations</h4>
+                            <p class="amount" id="totalDonationsAmount">₹0</p>
+                        </div>
+                        <div class="summary-card">
+                            <h4>This Month</h4>
+                            <p class="amount" id="pgMonthlyDonations">₹0</p>
+                        </div>
+                        <div class="summary-card">
+                            <h4>Average</h4>
+                            <p class="amount" id="averageDonation">₹0</p>
+                        </div>
+                        <div class="summary-card">
+                            <h4>Top Donor</h4>
+                            <p class="amount" id="topDonor">-</p>
+                        </div>
+                    </div>
+
+                    <div id="donationList" class="donation-grid"></div>
+
+                    <div id="donationLoading" style="display: none; text-align: center; padding: 40px;">
+                        <div class="spinner"></div>
+                        <p>Loading donations...</p>
+                    </div>
+                </section>
+
+                <!-- Expenses Section -->
+                <section id="expenses" class="section">
+                    <h2><i class="fas fa-chart-line"></i> Expense Management</h2>
+                    
+                    <div class="section-toolbar">
+                        <button onclick="showAddExpenseModal()" class="primary-btn">
+                            <i class="fas fa-plus"></i> Add Expense
+                        </button>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchExpense" placeholder="Search expenses..." onkeyup="searchExpenses()">
+                        </div>
+                        <select id="filterExpenseCategory" onchange="searchExpenses()" class="filter-select">
+                            <option value="all">All Categories</option>
+                            <option value="program">Program</option>
+                            <option value="admin">Administrative</option>
+                            <option value="staff">Staff</option>
+                            <option value="equipment">Equipment</option>
+                            <option value="travel">Travel</option>
+                            <option value="utilities">Utilities</option>
+                            <option value="rent">Rent</option>
+                            <option value="other">Other</option>
+                        </select>
+                        <button onclick="exportExpenses()" class="export-btn">
+                            <i class="fas fa-download"></i> Export
+                        </button>
+                    </div>
+
+                    <div class="stats-row">
+                        <div class="stat-card mini">
+                            <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
+                            <div>
+                                <h4>Total Expenses</h4>
+                                <p id="totalExpensesAmount">₹0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card mini">
+                            <div class="stat-icon"><i class="fas fa-calendar"></i></div>
+                            <div>
+                                <h4>This Month</h4>
+                                <p id="pgMonthlyExpenses">₹0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card mini">
+                            <div class="stat-icon"><i class="fas fa-chart-pie"></i></div>
+                            <div>
+                                <h4>Categories</h4>
+                                <p id="expenseCategories">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="expenseList" class="expense-grid"></div>
+                </section>
+
+                <!-- Programs Section -->
+                <section id="programs" class="section">
+                    <h2><i class="fas fa-project-diagram"></i> Program Management</h2>
+                    
+                    <div class="section-toolbar">
+                        <button onclick="showAddProgramModal()" class="primary-btn">
+                            <i class="fas fa-plus"></i> Add Program
+                        </button>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchProgram" placeholder="Search programs..." onkeyup="searchPrograms()">
+                        </div>
+                        <select id="filterProgramStatus" onchange="searchPrograms()" class="filter-select">
+                            <option value="all">All Status</option>
+                            <option value="planning">Planning</option>
+                            <option value="active">Active</option>
+                            <option value="completed">Completed</option>
+                            <option value="on-hold">On Hold</option>
+                        </select>
+                        <button onclick="exportPrograms()" class="export-btn">
+                            <i class="fas fa-download"></i> Export
+                        </button>
+                    </div>
+
+                    <div class="program-stats">
+                        <div class="stat-card small">
+                            <h4>Active Programs</h4>
+                            <p id="programsActiveCount">0</p>
+                        </div>
+                        <div class="stat-card small">
+                            <h4>Total Budget</h4>
+                            <p id="totalProgramBudget">₹0</p>
+                        </div>
+                        <div class="stat-card small">
+                            <h4>Completed</h4>
+                            <p id="completedPrograms">0</p>
+                        </div>
+                    </div>
+
+                    <div id="programList" class="program-grid"></div>
+                </section>
+
+                <!-- Volunteers Section -->
+                <section id="volunteers" class="section">
+                    <h2><i class="fas fa-hands-helping"></i> Volunteer Management</h2>
+                    
+                    <div class="section-toolbar">
+                        <button onclick="showAddVolunteerModal()" class="primary-btn">
+                            <i class="fas fa-user-plus"></i> Add Volunteer
+                        </button>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchVolunteer" placeholder="Search volunteers..." onkeyup="searchVolunteers()">
+                        </div>
+                        <select id="filterVolunteerStatus" onchange="searchVolunteers()" class="filter-select">
+                            <option value="all">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="on-leave">On Leave</option>
+                        </select>
+                        <button onclick="exportVolunteers()" class="export-btn">
+                            <i class="fas fa-download"></i> Export
+                        </button>
+                    </div>
+
+                    <!-- Volunteer Stats -->
+                    <div class="stats-row">
+                        <div class="stat-card mini">
+                            <div class="stat-icon"><i class="fas fa-users"></i></div>
+                            <div>
+                                <h4>Total Volunteers</h4>
+                                <p id="totalVolunteers">0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card mini">
+                            <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+                            <div>
+                                <h4>Active</h4>
+                                <p id="activeVolunteers">0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card mini">
+                            <div class="stat-icon"><i class="fas fa-clock"></i></div>
+                            <div>
+                                <h4>Total Hours</h4>
+                                <p id="pgVolunteerHours">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Volunteer Grid -->
+                    <div id="volunteerList" class="volunteer-grid"></div>
+                </section>
+
+                <!-- Communications Section -->
+                <section id="communications" class="section">
+                    <h2><i class="fas fa-envelope"></i> Communications</h2>
+                    
+                    <div class="comms-tabs">
+                        <button class="comms-tab active" onclick="switchCommsTab('messages')"><i class="fas fa-comments"></i> Messages</button>
+                        <button class="comms-tab" onclick="switchCommsTab('announcements')"><i class="fas fa-bullhorn"></i> Announcements</button>
+                        <button class="comms-tab" onclick="switchCommsTab('newsletter')"><i class="fas fa-newspaper"></i> Newsletter</button>
+                    </div>
+
+                    <!-- Messages Tab -->
+                    <div id="messagesTab" class="comms-tab-content active">
+                        <div class="message-compose">
+                            <h3><i class="fas fa-pen"></i> Compose Message</h3>
+                            <form id="messageForm" onsubmit="sendMessage(event); return false;">
+                                <div class="form-group">
+                                    <label>To:</label>
+                                    <select id="messageRecipient" required>
+                                        <option value="">Select Recipient</option>
+                                        <optgroup label="Volunteers"></optgroup>
+                                        <optgroup label="Staff"></optgroup>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Subject:</label>
+                                    <input type="text" id="messageSubject" placeholder="Subject" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Message:</label>
+                                    <textarea id="messageContent" rows="4" placeholder="Type your message here..." required></textarea>
+                                </div>
+                                <button type="submit" class="primary-btn"><i class="fas fa-paper-plane"></i> Send Message</button>
+                            </form>
+                        </div>
+                        <div class="message-inbox">
+                            <h3><i class="fas fa-inbox"></i> Inbox</h3>
+                            <div id="messageList" class="message-list"></div>
+                        </div>
+                    </div>
+
+                    <!-- Announcements Tab -->
+                    <div id="announcementsTab" class="comms-tab-content">
+                        <div class="announcement-compose">
+                            <h3><i class="fas fa-bullhorn"></i> Post Announcement</h3>
+                            <form id="announcementForm" onsubmit="sendAnnouncement(event); return false;">
+                                <div class="form-group">
+                                    <label>Title:</label>
+                                    <input type="text" id="announcementTitle" placeholder="Announcement title" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Content:</label>
+                                    <textarea id="announcementContent" rows="4" placeholder="Announcement content" required></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label>Audience:</label>
+                                    <select id="announcementAudience">
+                                        <option value="all">Everyone</option>
+                                        <option value="volunteers">Volunteers Only</option>
+                                        <option value="staff">Staff Only</option>
+                                        <option value="donors">Donors</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="primary-btn"><i class="fas fa-bullhorn"></i> Post Announcement</button>
+                            </form>
+                        </div>
+                        <div class="announcement-list">
+                            <h3>Recent Announcements</h3>
+                            <div id="announcementList"></div>
+                        </div>
+                    </div>
+
+                    <!-- Newsletter Tab -->
+                    <div id="newsletterTab" class="comms-tab-content">
+                        <div class="newsletter-compose">
+                            <h3><i class="fas fa-newspaper"></i> Send Newsletter</h3>
+                            <form id="newsletterForm" onsubmit="sendNewsletter(event); return false;">
+                                <div class="form-group">
+                                    <label>Subject:</label>
+                                    <input type="text" id="newsletterSubject" placeholder="Newsletter subject" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Content:</label>
+                                    <textarea id="newsletterContent" rows="6" placeholder="Newsletter content" required></textarea>
+                                </div>
+                                <div class="checkbox-group">
+                                    <label>
+                                        <input type="checkbox" id="sendToVolunteers" checked> Send to Volunteers
+                                    </label>
+                                    <label>
+                                        <input type="checkbox" id="sendToDonors" checked> Send to Donors
+                                    </label>
+                                </div>
+                                <button type="submit" class="primary-btn"><i class="fas fa-paper-plane"></i> Send Newsletter</button>
+                            </form>
+                        </div>
+                        <div class="newsletter-history">
+                            <h3>Newsletter History</h3>
+                            <div id="newsletterHistory"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Settings Section -->
+                <section id="settings" class="section">
+                    <h2><i class="fas fa-cog"></i> System Settings</h2>
+                    
+                    <div class="settings-grid">
+                        <!-- Organization Settings -->
+                        <div class="settings-card">
+                            <h3><i class="fas fa-building"></i> Organization Details</h3>
+                            <div class="form-group">
+                                <label>Organization Name:</label>
+                                <input type="text" id="orgName" value="NGO ERP" onchange="updateOrgSettings()">
+                            </div>
+                            <div class="form-group">
+                                <label>Email:</label>
+                                <input type="email" id="orgEmail" value="info@ngo.org" onchange="updateOrgSettings()">
+                            </div>
+                            <div class="form-group">
+                                <label>Phone:</label>
+                                <input type="text" id="orgPhone" value="+1 234 567 890" onchange="updateOrgSettings()">
+                            </div>
+                            <div class="form-group">
+                                <label>Address:</label>
+                                <textarea id="orgAddress" rows="2" onchange="updateOrgSettings()">123 Charity St, City, Country</textarea>
+                            </div>
+                        </div>
+
+                        <!-- Theme Settings -->
+                        <div class="settings-card">
+                            <h3><i class="fas fa-palette"></i> Theme Settings</h3>
+                            <div class="theme-options">
+                                <button onclick="setTheme('light')" class="theme-btn light">☀️ Light</button>
+                                <button onclick="setTheme('dark')" class="theme-btn dark">🌙 Dark</button>
+                                <button onclick="setTheme('blue')" class="theme-btn blue">💙 Blue</button>
+                            </div>
+                            <div class="form-group">
+                                <label>Accent Color:</label>
+                                <input type="color" id="accentColor" value="#27ae60" onchange="changeAccentColor(this.value)">
+                            </div>
+                            <div class="form-group">
+                                <label>Currency:</label>
+                                <select id="currency" onchange="updateSettings()">
+                                    <option value="INR">INR (₹)</option>
+                                    <option value="USD">USD ($)</option>
+                                    <option value="EUR">EUR (€)</option>
+                                    <option value="GBP">GBP (£)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- ENHANCED USER MANAGEMENT CARD -->
+                        <div class="settings-card">
+                            <h3><i class="fas fa-user-shield"></i> User Management</h3>
+                            
+                            <!-- User Creation Section (Only visible to admins) -->
+                            <div id="userCreationSection" style="display: none;">
+                                <h4 style="margin: 15px 0 10px; color: var(--primary-color);">
+                                    <i class="fas fa-user-plus"></i> Create New User
+                                </h4>
+                                <form id="newUserForm" onsubmit="createNewUser(event); return false;">
+                                    <div class="form-group">
+                                        <label><i class="fas fa-user"></i> Full Name *</label>
+                                        <input type="text" id="newFullName" placeholder="Enter full name" required>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label><i class="fas fa-envelope"></i> Email *</label>
+                                            <input type="email" id="newEmail" placeholder="Enter email" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label><i class="fas fa-user-tag"></i> Username *</label>
+                                            <input type="text" id="newUsername" placeholder="Choose username" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label><i class="fas fa-lock"></i> Password *</label>
+                                            <input type="password" id="newUserPassword" placeholder="Enter password" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label><i class="fas fa-building"></i> Department *</label>
+                                            <select id="newDepartment" required>
+                                                <option value="">Select Department</option>
+                                                <option value="Finance">Finance</option>
+                                                <option value="Programs">Programs</option>
+                                                <option value="Operations">Operations</option>
+                                                <option value="HR">Human Resources</option>
+                                                <option value="Executive">Executive</option>
+                                                <option value="Donor">Donor Relations</option>
+                                                <option value="Volunteer">Volunteer Services</option>
+                                                <option value="External">External</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-user-tie"></i> Role *</label>
+                                        <select id="newRole" required onchange="updatePermissionsPreview()">
+                                            <option value="">Select Role</option>
+                                            <option value="finance_manager">Finance Manager</option>
+                                            <option value="accountant">Accountant</option>
+                                            <option value="program_manager">Program Manager</option>
+                                            <option value="program_coordinator">Program Coordinator</option>
+                                            <option value="field_staff">Field Staff</option>
+                                            <option value="outreach_worker">Outreach Worker</option>
+                                            <option value="volunteer_manager">Volunteer Coordinator</option>
+                                            <option value="donor">Donor (Can view donations)</option>
+                                            <option value="volunteer">Volunteer (View only)</option>
+                                            <option value="guest">Guest (Read Only)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-key"></i> Permissions Preview</label>
+                                        <div id="permissionsPreview" style="background: var(--light-color); padding: 10px; border-radius: 5px; font-size: 12px; max-height: 100px; overflow-y: auto;">
+                                            Select a role to see permissions
+                                        </div>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit" class="primary-btn"><i class="fas fa-save"></i> Create User</button>
+                                        <button type="button" class="secondary-btn" onclick="resetUserForm()">Reset</button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <!-- User List -->
+                            <h4 style="margin: 20px 0 10px; color: var(--primary-color);">
+                                <i class="fas fa-users"></i> System Users
+                            </h4>
+                            <div id="userList" class="user-list"></div>
+                        </div>
+
+                        <!-- Notification Settings -->
+                        <div class="settings-card">
+                            <h3><i class="fas fa-bell"></i> Notifications</h3>
+                            <label class="switch">
+                                <input type="checkbox" id="emailNotifications" checked onchange="updateSettings()">
+                                <span class="slider"></span> Email Notifications
+                            </label>
+                            <label class="switch">
+                                <input type="checkbox" id="smsNotifications" onchange="updateSettings()">
+                                <span class="slider"></span> SMS Notifications
+                            </label>
+                            <label class="switch">
+                                <input type="checkbox" id="taskReminders" checked onchange="updateSettings()">
+                                <span class="slider"></span> Task Reminders
+                            </label>
+                            <label class="switch">
+                                <input type="checkbox" id="twoFactorAuth" onchange="updateSettings()">
+                                <span class="slider"></span> Two-Factor Authentication
+                            </label>
+                        </div>
+
+                        <!-- Data Management -->
+                        <div class="settings-card">
+                            <h3><i class="fas fa-database"></i> Data Management</h3>
+                            <button onclick="backupData()" class="settings-btn">
+                                <i class="fas fa-download"></i> Download Backup
+                            </button>
+                            <button onclick="restoreData()" class="settings-btn">
+                                <i class="fas fa-upload"></i> Restore Backup
+                            </button>
+                            <button onclick="exportAllData()" class="settings-btn">
+                                <i class="fas fa-file-excel"></i> Export All to Excel
+                            </button>
+                            <button onclick="clearData()" class="settings-btn danger">
+                                <i class="fas fa-trash"></i> Clear All Data
+                            </button>
+                        </div>
+
+                        <!-- Security Settings -->
+                        <div class="settings-card">
+                            <h3><i class="fas fa-shield-alt"></i> Security</h3>
+                            <button onclick="changePassword()" class="settings-btn">
+                                <i class="fas fa-key"></i> Change Password
+                            </button>
+                            <label class="switch">
+                                <input type="checkbox" id="sessionTimeout" checked onchange="updateSettings()">
+                                <span class="slider"></span> Session Timeout (30 min)
+                            </label>
+                            <div class="form-group">
+                                <label>Default Report Period:</label>
+                                <select id="defaultReportPeriod" onchange="updateSettings()">
+                                    <option value="monthly">Monthly</option>
+                                    <option value="quarterly">Quarterly</option>
+                                    <option value="yearly">Yearly</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- CALENDAR SECTION -->
+                <section id="calendar" class="section">
+                    <h2><i class="fas fa-calendar-alt"></i> Calendar</h2>
+                    
+                    <div class="calendar-toolbar">
+                        <select onchange="filterCalendarByType(this.value)" class="calendar-filter">
+                            <option value="all">All Events</option>
+                            <option value="program">Program Events</option>
+                            <option value="volunteer">Volunteer Activities</option>
+                            <option value="donation">Donation Drives</option>
+                            <option value="meeting">Meetings</option>
+                        </select>
+                        <button onclick="showAddEventModal()" class="primary-btn">
+                            <i class="fas fa-plus"></i> Add Event
+                        </button>
+                    </div>
+
+                    <div id="calendarContainer" class="calendar-container"></div>
+
+                    <div class="event-list" id="eventList">
+                        <h3>Upcoming Events</h3>
+                        <!-- Events will be displayed here -->
+                    </div>
+                </section>
+
+                <!-- REPORTS/ANALYTICS SECTION -->
+                <section id="reports" class="section">
+                    <h2><i class="fas fa-chart-pie"></i> Analytics & Reports</h2>
+                    
+                    <div class="analytics-dashboard">
+                        <div class="date-range-picker">
+                            <input type="month" id="analyticsMonth" value="" onchange="updateAnalytics()">
+                            <button onclick="exportAnalytics()" class="export-btn">
+                                <i class="fas fa-download"></i> Export
+                            </button>
+                        </div>
+
+                        <!-- Key Metrics -->
+                        <div class="stats-row" id="keyMetrics"></div>
+
+                        <!-- Growth Chart -->
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <h3>Growth Trends</h3>
+                                <select onchange="updateGrowthChart()" class="chart-filter">
+                                    <option value="6">Last 6 months</option>
+                                    <option value="12">Last 12 months</option>
+                                </select>
+                            </div>
+                            <canvas id="growthChart" height="300"></canvas>
+                        </div>
+
+                        <!-- Demographics Chart -->
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <h3>Beneficiary Demographics</h3>
+                            </div>
+                            <canvas id="demographicsChart" height="300"></canvas>
+                        </div>
+
+                        <!-- Impact Meter -->
+                        <div class="analytics-grid">
+                            <div class="analytics-card">
+                                <h4>Impact Score</h4>
+                                <div id="impactMeter" class="impact-meter"></div>
+                            </div>
+
+                            <!-- Predictive Analytics -->
+                            <div class="predictive-card">
+                                <h3>AI Predictions</h3>
+                                <div class="predictions-grid">
+                                    <div class="prediction-item">
+                                        <span>Next Month Donations</span>
+                                        <strong id="predictedDonations">₹0</strong>
+                                    </div>
+                                    <div class="prediction-item">
+                                        <span>Beneficiary Growth</span>
+                                        <strong id="predictedGrowth">+0%</strong>
+                                    </div>
+                                    <div class="prediction-item">
+                                        <span>Budget Status</span>
+                                        <strong id="budgetStatus">On Track</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- ==================== MODALS ==================== -->
+
+    <!-- Add Event Modal -->
+    <div id="eventModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-calendar-plus"></i> Add Event</h3>
+                <button class="close-btn" onclick="closeModal('eventModal')">&times;</button>
+            </div>
+            <form id="eventForm" onsubmit="handleAddEvent(event); return false;">
+                <div class="form-group">
+                    <label><i class="fas fa-heading"></i> Event Title *</label>
+                    <input type="text" id="eventTitle" placeholder="Enter event title" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-calendar"></i> Date *</label>
+                        <input type="date" id="eventDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-clock"></i> Time *</label>
+                        <input type="time" id="eventTime" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-map-marker-alt"></i> Location</label>
+                    <input type="text" id="eventLocation" placeholder="e.g. Barmer, Rajasthan">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-align-left"></i> Description</label>
+                    <textarea id="eventDescription" rows="3" placeholder="Event description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-tag"></i> Event Type</label>
+                    <select id="eventType">
+                        <option value="program">Program Event</option>
+                        <option value="volunteer">Volunteer Activity</option>
+                        <option value="donation">Donation Drive</option>
+                        <option value="meeting">Meeting</option>
+                        <option value="field_visit">Field Visit</option>
+                        <option value="training">Training</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="primary-btn"><i class="fas fa-save"></i> Save Event</button>
+                    <button type="button" class="secondary-btn" onclick="closeModal('eventModal')"><i class="fas fa-times"></i> Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Upload Document Modal -->
+    <div id="uploadModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-upload"></i> Upload Document</h3>
+                <button class="close-btn" onclick="closeModal('uploadModal')">&times;</button>
+            </div>
+            <form id="documentForm" onsubmit="handleUploadDocument(event); return false;">
+                <div class="form-group">
+                    <label><i class="fas fa-file"></i> Document Name *</label>
+                    <input type="text" id="docName" placeholder="Enter document name" required>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-folder"></i> Category *</label>
+                    <select id="docCategory" required>
+                        <option value="">Select Category</option>
+                        <option value="programs">Programs</option>
+                        <option value="beneficiaries">Beneficiaries</option>
+                        <option value="financial">Financial</option>
+                        <option value="legal">Legal</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-file-upload"></i> File *</label>
+                    <input type="file" id="docFile" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png" required>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-align-left"></i> Description</label>
+                    <textarea id="docDescription" rows="3" placeholder="Document description"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="primary-btn"><i class="fas fa-upload"></i> Upload</button>
+                    <button type="button" class="secondary-btn" onclick="closeModal('uploadModal')"><i class="fas fa-times"></i> Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- QR Code Modal -->
+    <div id="qrModal" class="modal">
+        <div class="modal-content small">
+            <div class="modal-header">
+                <h3><i class="fas fa-qrcode"></i> Beneficiary QR Code</h3>
+                <button class="close-btn" onclick="closeModal('qrModal')">&times;</button>
+            </div>
+            <div id="qrCode" class="qr-container"></div>
+            <p id="qrInfo" class="text-center"></p>
+            <div class="form-actions">
+                <button onclick="printQR()" class="primary-btn"><i class="fas fa-print"></i> Print</button>
+                <button onclick="closeModal('qrModal')" class="secondary-btn"><i class="fas fa-times"></i> Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Receipt Modal -->
+    <div id="receiptModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-receipt"></i> Donation Receipt</h3>
+                <button class="close-btn" onclick="closeModal('receiptModal')">&times;</button>
+            </div>
+            <div id="receiptContent" class="receipt-container"></div>
+            <div class="form-actions">
+                <button onclick="printReceipt()" class="primary-btn"><i class="fas fa-print"></i> Print</button>
+                <button onclick="downloadReceipt()" class="secondary-btn"><i class="fas fa-download"></i> Download PDF</button>
+                <button onclick="closeModal('receiptModal')" class="secondary-btn"><i class="fas fa-times"></i> Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+    </div>
+
+    <!-- Add Beneficiary Modal -->
+    <div id="beneficiaryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-user-plus"></i> Add New Beneficiary</h3>
+                <button class="close-btn" onclick="closeModal('beneficiaryModal')">&times;</button>
+            </div>
+            <form id="beneficiaryForm" onsubmit="saveBeneficiaryFromModal(); return false;">
+                <div class="form-group">
+                    <label><i class="fas fa-user"></i> Full Name *</label>
+                    <input type="text" id="modalBeneficiaryName" placeholder="Enter full name" required>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-phone"></i> Contact Number</label>
+                        <input type="tel" id="modalBeneficiaryContact" placeholder="Enter phone number">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-envelope"></i> Email</label>
+                        <input type="email" id="modalBeneficiaryEmail" placeholder="Enter email">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-map-marker-alt"></i> Address</label>
+                    <textarea id="modalBeneficiaryAddress" rows="2" placeholder="Enter full address"></textarea>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-tag"></i> Type *</label>
+                        <select id="modalBeneficiaryType" required>
+                            <option value="individual">Individual</option>
+                            <option value="family">Family</option>
+                            <option value="community">Community</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-project-diagram"></i> Program</label>
+                        <select id="modalBeneficiaryProgram">
+                            <option value="">None (General)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-sticky-note"></i> Notes</label>
+                    <textarea id="modalBeneficiaryNotes" rows="2" placeholder="Additional notes..."></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="primary-btn"><i class="fas fa-save"></i> Save Beneficiary</button>
+                    <button type="button" class="secondary-btn" onclick="closeModal('beneficiaryModal')"><i class="fas fa-times"></i> Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Donation Modal -->
+    <div id="donationModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-hand-holding-heart"></i> Record New Donation</h3>
+                <button class="close-btn" onclick="closeModal('donationModal')">&times;</button>
+            </div>
+            <form id="donationForm" onsubmit="saveDonationFromModal(); return false;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Donor Name *</label>
+                        <input type="text" id="modalDonorName" placeholder="Enter donor name" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-rupee-sign"></i> Amount *</label>
+                        <input type="number" id="modalDonationAmount" placeholder="Enter amount" step="0.01" min="0" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-calendar"></i> Date *</label>
+                        <input type="date" id="modalDonationDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-tag"></i> Type *</label>
+                        <select id="modalDonationType" required>
+                            <option value="cash">Cash</option>
+                            <option value="kind">In-Kind (Goods)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-project-diagram"></i> Program</label>
+                        <select id="modalDonationProgram">
+                            <option value="">General Fund</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-phone"></i> Donor Phone</label>
+                        <input type="tel" id="modalDonorPhone" placeholder="Optional">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-envelope"></i> Donor Email</label>
+                    <input type="email" id="modalDonorEmail" placeholder="Optional">
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-sticky-note"></i> Notes</label>
+                    <textarea id="modalDonationNotes" rows="2" placeholder="Additional notes..."></textarea>
+                </div>
+                
+                <div class="form-checkbox">
+                    <label>
+                        <input type="checkbox" id="modalGenerateReceipt" checked> 
+                        <i class="fas fa-receipt"></i> Generate receipt for this donation
+                    </label>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="primary-btn"><i class="fas fa-save"></i> Save Donation</button>
+                    <button type="button" class="secondary-btn" onclick="closeModal('donationModal')"><i class="fas fa-times"></i> Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Expense Modal -->
+    <div id="expenseModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-receipt"></i> Add New Expense</h3>
+                <button class="close-btn" onclick="closeModal('expenseModal')">&times;</button>
+            </div>
+            <form id="expenseModalForm" onsubmit="saveExpenseFromModal(); return false;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-tag"></i> Description *</label>
+                        <input type="text" id="modalExpenseDescription" placeholder="Enter expense description" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-rupee-sign"></i> Amount *</label>
+                        <input type="number" id="modalExpenseAmount" placeholder="Enter amount" step="0.01" min="0" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-calendar"></i> Date *</label>
+                        <input type="date" id="modalExpenseDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-folder"></i> Category *</label>
+                        <select id="modalExpenseCategory" required>
+                            <option value="program">Program Expenses</option>
+                            <option value="admin">Administrative</option>
+                            <option value="staff">Staff Salary</option>
+                            <option value="equipment">Equipment</option>
+                            <option value="travel">Travel</option>
+                            <option value="utilities">Utilities</option>
+                            <option value="rent">Rent</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-project-diagram"></i> Program</label>
+                        <select id="modalExpenseProgram">
+                            <option value="">General</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-credit-card"></i> Payment Method</label>
+                        <select id="modalExpensePaymentMethod">
+                            <option value="cash">Cash</option>
+                            <option value="bank">Bank Transfer</option>
+                            <option value="card">Credit/Debit Card</option>
+                            <option value="check">Check</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-building"></i> Vendor/Payee</label>
+                        <input type="text" id="modalExpenseVendor" placeholder="Vendor or payee name">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-hashtag"></i> Invoice/Reference No.</label>
+                        <input type="text" id="modalExpenseReference" placeholder="Invoice or reference number">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-sticky-note"></i> Notes</label>
+                    <textarea id="modalExpenseNotes" rows="2" placeholder="Additional notes..."></textarea>
+                </div>
+                
+                <div class="form-checkbox">
+                    <label>
+                        <input type="checkbox" id="modalExpenseReimbursable"> 
+                        <i class="fas fa-undo-alt"></i> This expense is reimbursable
+                    </label>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="primary-btn"><i class="fas fa-save"></i> Save Expense</button>
+                    <button type="button" class="secondary-btn" onclick="closeModal('expenseModal')"><i class="fas fa-times"></i> Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- View Receipt Modal -->
+    <div id="viewReceiptModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-receipt"></i> Donation Receipt</h3>
+                <button class="close-btn" onclick="closeModal('viewReceiptModal')">&times;</button>
+            </div>
+            <div id="receiptContentCopy" class="receipt-container"></div>
+            <div class="form-actions">
+                <button onclick="printCurrentReceipt()" class="primary-btn"><i class="fas fa-print"></i> Print</button>
+                <button onclick="downloadCurrentReceipt()" class="secondary-btn"><i class="fas fa-download"></i> Download</button>
+                <button onclick="closeModal('viewReceiptModal')" class="secondary-btn"><i class="fas fa-times"></i> Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Program Modal -->
+    <div id="programModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-project-diagram"></i> Add New Program</h3>
+                <button class="close-btn" onclick="closeModal('programModal')">&times;</button>
+            </div>
+            <form id="programModalForm" onsubmit="saveProgramFromModal(); return false;">
+                <div class="form-group">
+                    <label><i class="fas fa-tag"></i> Program Name *</label>
+                    <input type="text" id="modalProgramName" placeholder="Enter program name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-align-left"></i> Description</label>
+                    <textarea id="modalProgramDescription" rows="3" placeholder="Enter program description"></textarea>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-rupee-sign"></i> Budget</label>
+                        <input type="number" id="modalProgramBudget" placeholder="Enter budget amount" step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-calendar"></i> Start Date *</label>
+                        <input type="date" id="modalProgramStartDate" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-calendar"></i> End Date *</label>
+                        <input type="date" id="modalProgramEndDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-clock"></i> Status *</label>
+                        <select id="modalProgramStatus" required>
+                            <option value="planning">Planning</option>
+                            <option value="active">Active</option>
+                            <option value="completed">Completed</option>
+                            <option value="on-hold">On Hold</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-users"></i> Target Beneficiaries</label>
+                        <input type="number" id="modalProgramTarget" placeholder="Number of beneficiaries" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-map-marker-alt"></i> Location</label>
+                        <input type="text" id="modalProgramLocation" placeholder="Program location">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-sticky-note"></i> Notes</label>
+                    <textarea id="modalProgramNotes" rows="2" placeholder="Additional notes..."></textarea>
+                </div>
+                
+                <div class="form-checkbox">
+                    <label>
+                        <input type="checkbox" id="modalProgramIsActive" checked> 
+                        <i class="fas fa-power-off"></i> Set as active immediately
+                    </label>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="primary-btn"><i class="fas fa-save"></i> Save Program</button>
+                    <button type="button" class="secondary-btn" onclick="closeModal('programModal')"><i class="fas fa-times"></i> Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Volunteer Modal -->
+    <div id="volunteerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-hands-helping"></i> Register New Volunteer</h3>
+                <button class="close-btn" onclick="closeModal('volunteerModal')">&times;</button>
+            </div>
+            <form id="volunteerModalForm" onsubmit="saveVolunteerFromModal(); return false;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Full Name *</label>
+                        <input type="text" id="modalVolunteerName" placeholder="Enter full name" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-envelope"></i> Email *</label>
+                        <input type="email" id="modalVolunteerEmail" placeholder="Enter email" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-phone"></i> Phone *</label>
+                        <input type="tel" id="modalVolunteerPhone" placeholder="Enter phone number" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-calendar"></i> Join Date *</label>
+                        <input type="date" id="modalVolunteerJoinDate" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-tag"></i> Skills</label>
+                        <select id="modalVolunteerSkills" multiple size="4">
+                            <option value="teaching">Teaching/Tutoring</option>
+                            <option value="healthcare">Healthcare/Medical</option>
+                            <option value="administration">Administration</option>
+                            <option value="fundraising">Fundraising</option>
+                            <option value="events">Event Management</option>
+                            <option value="it">IT Support</option>
+                            <option value="marketing">Marketing/Social Media</option>
+                            <option value="counseling">Counseling</option>
+                            <option value="translation">Translation</option>
+                            <option value="driving">Driving/Transport</option>
+                        </select>
+                        <small>Hold Ctrl/Cmd to select multiple</small>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-clock"></i> Availability</label>
+                        <select id="modalVolunteerAvailability">
+                            <option value="weekdays">Weekdays</option>
+                            <option value="weekends">Weekends</option>
+                            <option value="evenings">Evenings</option>
+                            <option value="flexible">Flexible</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-phone-alt"></i> Emergency Contact</label>
+                        <input type="text" id="modalVolunteerEmergency" placeholder="Emergency contact name & number">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-check-circle"></i> Status</label>
+                        <select id="modalVolunteerStatus">
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="on-leave">On Leave</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-sticky-note"></i> Notes</label>
+                    <textarea id="modalVolunteerNotes" rows="2" placeholder="Additional notes..."></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="primary-btn"><i class="fas fa-save"></i> Register Volunteer</button>
+                    <button type="button" class="secondary-btn" onclick="closeModal('volunteerModal')"><i class="fas fa-times"></i> Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+
+    <!-- ✅ FIREBASE REALTIME DATABASE SDK -->
+    <!-- Firebase SDK (compat v9 - loads as regular script, not module) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script>
+    const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+};
+        const _app = firebase.initializeApp(firebaseConfig);
+        const _db  = firebase.database();
+
+        // Expose helpers matching the modular API shape used in main.js
+        window._firebase = {
+            db:     _db,
+            ref:    function(db, path) { return db.ref(path); },
+            set:    function(ref, data) { return ref.set(data); },
+            get:    function(ref) { return ref.once('value'); },
+            remove: function(ref) { return ref.remove(); }
+        };
+        console.log("✅ Firebase Realtime Database connected!");
+        window.dispatchEvent(new Event('firebase-ready'));
+    </script>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

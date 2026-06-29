@@ -86,26 +86,6 @@ ngo_project/
 
 ---
 
-## 🔐 Login Credentials
-
-| Username |  |
-|---|---|---|
-| admin | 👑 Super Admin |
-| finance | 💰 Finance Manager |
-| accountant | 📊 Accountant |
-| program | 📋 Program Director |
-| coordinator | 📌 Program Coordinator |
-| field | 🌍 Field Officer |
-| outreach | 🤝 Outreach Worker |
-| volunteer | 👥 Volunteer Coordinator |
-| hr | 👔 HR Manager |
-| director | 🎯 Executive Director |
-| board | 📋 Board Member |
-| guest | 👁️ Guest (Analytics only) |
-| auditor | 🔍 External Auditor |
-
----
-
 ## 🔑 Role-Based Access
 
 | Section | Who Can Access |
@@ -209,18 +189,6 @@ const firebaseConfig = {
 
 ---
 
-## 📸 Screenshots
-
-| Page | Description |
-|---|---|
-| Login | Secure login with role detection |
-| Dashboard | Overview of all key metrics |
-| Beneficiaries | Full list with search and filter |
-| Donations | Donation records with receipt generation |
-| Analytics | Charts for financial and program data |
-| Communications | Role-filtered messages and announcements |
-
----
 
 
 
